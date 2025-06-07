@@ -1,10 +1,15 @@
 import express from 'express';
 import dotenv from "dotenv";
 import { connectDB } from './config/db.js';
+import userRoutes from './routes/user.js'
 
 dotenv.config();
 const app = express();
 
+app.use(express.json());
+
+//Rotas
+app.use('/user',userRoutes);
 
 app.get("/", (req,res) =>{
     res.send("Server is Ready");
