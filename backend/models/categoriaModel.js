@@ -4,7 +4,7 @@ const categoriaSchema = new mongoose.Schema({
   nome: {
     type: String,
     required: [true, 'Nome da categoria é obrigatório']},
-  livros: [{ype: mongoose.Schema.Types.ObjectId, ref: "Livro"}],
+  livros: [{type: mongoose.Schema.Types.ObjectId, ref: "Livro"}],
   createdAt: {type: Date,default: Date.now},
 });
 
