@@ -1,9 +1,7 @@
 import jwt from "jsonwebtoken";
-import User from "../models/userModel";
+import User from "../models/userModel.js";
 
-
-
-const generateTokens=() =>{
+const generateTokens = (user) => { // 
     const accessToken = jwt.sign(
         {userId: user?._id},
         process.env.ACCESS_TOKEN_SECRET,
@@ -16,33 +14,33 @@ const generateTokens=() =>{
         {expiresIn:"7d"}
     ); 
 
-    return {accessToken,refreshToken};
+    return {accessToken, refreshToken};
 }
-const loginOrSignUp = async(req,res) =>{
 
-    const {email,role} = req.body;
-    try{
+const loginOrSignUp = async(req, res) => {
+    const {email, role} = req.body;
+    
+    try {
+        let user = await User.findOne({email});
 
-        let user = await User.findOne({email})
-
-        if(!user){
-            user = new User({role,email});
+        if(!user) {
+            user = new User({role, email});
             await user.save();
-        }else{
+        } else {
             user.role = role;
             await user.save();
         }
 
-        const { } = generateTokens(user.toObject());
+        const {accessToken, refreshToken} = generateTokens(user.toObject()); // Fixed destructuring
 
         res.status(200).json({
             user,
             accessToken,
             refreshToken,
         });
-    }catch(error){
-        console.log(err);
-        res.status(500).json({error: err.message});
+    } catch(error) { 
+        console.log(error); 
+        res.status(500).json({error: error.message}); 
     }
 }
 
