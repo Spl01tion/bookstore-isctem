@@ -240,5 +240,96 @@ const addFavoriteBook = async (req, res) => {
 
 
 
+/**
+ * @desc    Remover um livro da lista de favoritos do usuário
+ * @route   DELETE /api/users/favorites/:livroId
+ * @access  Private
+ */
+const removeFavoriteBook = async (req, res) => {
+    // Pega o livroId dos parâmetros da URL
+    const { livroId } = req.params;
+    let token;
+    console.log("livroId:", livroId);
+    // Autentica o usuário (lógica que já temos)
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+        try {
+            token = req.headers.authorization.split(' ')[1];
+            const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+            const userId = decoded.userId;
 
-export { livroPorCategoriaID, getAllLivros, createLivro, getFavoriteBooks, searchLivros, addFavoriteBook };
+            // Usa $pull para remover um item de um array
+            // $pull é o oposto do $push ou $addToSet
+            const updatedUser = await User.findByIdAndUpdate(
+                userId,
+                { $pull: { favoritos: livroId } },
+                { new: true, select: 'favoritos' } // Retorna o documento atualizado
+            );
+
+            if (!updatedUser) {
+                return res.status(404).json({ message: "Usuário não encontrado." });
+            }
+
+            res.status(200).json({
+                message: "Livro removido dos favoritos com sucesso!",
+                favoritos: updatedUser.favoritos
+            });
+
+        } catch (error) {
+            res.status(401).json({ message: 'Token inválido ou expirado.' });
+        }
+    } else {
+        res.status(401).json({ message: 'Não autorizado, o token é necessário.' });
+    }
+};
+
+
+
+
+/**
+ * @desc    Atualizar (editar) um livro existente
+ * @route   PUT /api/livros/:id
+ * @access  Private/Admin
+ */
+const updateLivro = async (req, res) => {
+    // 1. Pega o ID do livro dos parâmetros da URL
+    const { id } = req.params;
+    // 2. Pega todos os dados a serem atualizados do corpo da requisição
+    const updateData = req.body;
+
+    try {
+        // 3. Encontra o livro pelo ID e o atualiza
+        // O método findByIdAndUpdate é perfeito para isso.
+        // O argumento { new: true } garante que a resposta retorne o documento *após* a atualização.
+        const livroAtualizado = await Livro.findByIdAndUpdate(id, updateData, {
+            new: true,
+            runValidators: true // Garante que as validações do schema (ex: minlength) sejam aplicadas
+        });
+
+        // 4. Se nenhum livro com esse ID for encontrado
+        if (!livroAtualizado) {
+            return res.status(404).json({ message: "Livro não encontrado." });
+        }
+
+        // --- Lógica Adicional Opcional: Atualizar Categorias ---
+        // Se a categoria do livro foi alterada, pode ser necessário atualizar
+        // as coleções de Categoria para remover o livro da categoria antiga
+        // e adicionar à nova. Por agora, vamos manter simples.
+
+        // 5. Envia o livro atualizado como resposta
+        res.status(200).json(livroAtualizado);
+
+    } catch (error) {
+        // Trata erros, incluindo erros de validação
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({ message: "Erro de Validação", details: error.message });
+        }
+        if (error.name === 'CastError') {
+            return res.status(400).json({ message: `ID do livro inválido: ${id}` });
+        }
+        console.error("Erro ao atualizar livro:", error);
+        res.status(500).json({ message: "Erro no servidor ao atualizar o livro." });
+    }
+};
+
+
+export { livroPorCategoriaID, updateLivro, removeFavoriteBook, getAllLivros, createLivro, getFavoriteBooks, searchLivros, addFavoriteBook };
