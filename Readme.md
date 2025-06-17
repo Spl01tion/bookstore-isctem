@@ -1,23 +1,23 @@
-# 📚 Documentação da API - Bookstore ISCTEM
+---
+
+# 📚 Documentação da API - Bookstore ISCTEM (V3)
 
 Bem-vindo à documentação oficial da API do Bookstore. Esta guia descreve todos os endpoints disponíveis, os dados necessários para as requisições e exemplos das respostas esperadas.
 
-**URL Base da API**: `http://localhost:PORTA` (substitua `PORTA` pela porta onde o seu servidor está a correr, ex: `5000`).
-
-**Header Padrão**: Todas as requisições `POST` devem incluir o header `Content-Type: application/json`.
+*   **URL Base para Usuários**: `/api/users`
+*   **URL Base para Categorias**: `/api/categorias`
+*   **URL Base para Livros**: `/api/livros`
 
 ---
 
 ## 👤 Autenticação e Usuários
 
-Endpoints para gerir o registo, login e listagem de usuários.
+Endpoints para gerir o registo, login e dados dos usuários. Rota base: `/api/users`.
 
-### 1. Criar um Novo Usuário (Registo)
+### 1. Criar um Novo Usuário (Signup)
 
-Regista um novo usuário no sistema.
-
-- **Endpoint**: **`POST`** `/api/users/register`
-- **Descrição**: Cria um novo perfil de usuário. Ideal para a página de registo da sua aplicação.
+- **Endpoint**: **`POST`** `/api/users/signup`
+- **Descrição**: Cria um novo perfil de usuário.
 - **Corpo da Requisição**:
   ```json
   {
@@ -26,31 +26,12 @@ Regista um novo usuário no sistema.
     "password": "sua_senha_secreta"
   }
   ```
-- **Resposta de Sucesso (`201 Created`)**:
-  `json
-{
-    "message": "User created successfully!",
-    "user": {
-        "role": "user",
-        "avatar": null,
-        "isActive": true,
-        "_id": "64fcfe0a123abc456def7890",
-        "name": "Seu Nome Completo",
-        "email": "seu.email@exemplo.com",
-        "createdAt": "2023-09-09T12:00:00.000Z"
-    },
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-}
-`
-  > **Nota**: Conforme solicitado, a senha é guardada como texto simples. Num projeto real, a senha deve ser sempre criptografada com `bcrypt`.
+- **Resposta de Sucesso (`201 Created`)**: Retorna os dados do usuário criado e os tokens de acesso.
 
 ### 2. Autenticar Usuário (Login)
 
-Autentica um usuário existente e retorna os seus dados e tokens de acesso.
-
 - **Endpoint**: **`POST`** `/api/users/login`
-- **Descrição**: Valida as credenciais de um usuário e, se corretas, inicia a sua sessão.
+- **Descrição**: Autentica um usuário. Se o usuário não existir, cria um novo perfil sem senha (ideal para login social).
 - **Corpo da Requisição**:
   ```json
   {
@@ -58,186 +39,125 @@ Autentica um usuário existente e retorna os seus dados e tokens de acesso.
     "password": "sua_senha_secreta"
   }
   ```
-- **Resposta de Sucesso (`200 OK`)**:
-  ```json
-  {
-    "message": "Login successful!",
-    "user": {
-      "_id": "64fcfe0a123abc456def7890",
-      "name": "Seu Nome Completo",
-      "email": "seu.email@exemplo.com",
-      "role": "user"
-    },
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-  }
-  ```
+- **Resposta de Sucesso (`200 OK`)**: Retorna os dados do usuário e os tokens (`accessToken`, `refreshToken`).
 
 ### 3. Listar Todos os Usuários
 
-Retorna uma lista com todos os usuários registados.
+- **Endpoint**: **`GET`** `/api/users/users`
+- **Descrição**: Endpoint de administração para visualizar todos os usuários.
+- **Resposta de Sucesso (`200 OK`)**: Retorna um array com todos os objetos de usuário.
 
-- **Endpoint**: **`GET`** `/api/users`
-- **Descrição**: Endpoint de administração para visualizar todos os usuários. Num ambiente de produção, esta rota deve ser protegida e acessível apenas por administradores.
-- **Corpo da Requisição**: Nenhum.
-- **Resposta de Sucesso (`200 OK`)**:
-  ```json
-  [
-    {
-      "role": "admin",
-      "avatar": null,
-      "isActive": true,
-      "_id": "64fcfe0a123abc456def7891",
-      "name": "Administrador",
-      "email": "admin@exemplo.com",
-      "createdAt": "2023-09-09T11:00:00.000Z"
-    },
-    {
-      "role": "user",
-      "avatar": null,
-      "isActive": true,
-      "_id": "64fcfe0a123abc456def7890",
-      "name": "Seu Nome Completo",
-      "email": "seu.email@exemplo.com",
-      "createdAt": "2023-09-09T12:00:00.000Z"
-    }
-  ]
-  ```
+### 4. Adicionar Livro aos Favoritos
 
-### 4. Login Social (ou Sem Senha)
-
-Cria um novo usuário (se não existir) com base no email, sem necessitar de senha.
-
-- **Endpoint**: **`POST`** `/api/users/social-login`
-- **Descrição**: Útil para integrações com "Login com Google/Facebook", onde a senha não é gerida pela nossa aplicação.
+- **Endpoint**: **`POST`** `/api/users/addfav`
+- **Descrição**: Adiciona um livro à lista de favoritos do usuário autenticado.
+- **Header Obrigatório**: `Authorization: Bearer <seu_accessToken>`
 - **Corpo da Requisição**:
   ```json
   {
-    "email": "usuario.novo@gmail.com",
-    "role": "user"
+    "livroId": "68508c0a433e991c8496ce0d"
   }
   ```
-- **Resposta de Sucesso (`200 OK`)**:
-  _A resposta é idêntica à do endpoint de login, retornando os dados do usuário e os tokens._
+- **Resposta de Sucesso (`200 OK`)**: Retorna uma mensagem e a lista atualizada de IDs favoritos.
+
+### 5. Listar os Livros Favoritos
+
+- **Endpoint**: **`GET`** `/api/users/fav`
+- **Descrição**: Retorna a lista completa de livros favoritos do usuário autenticado.
+- **Header Obrigatório**: `Authorization: Bearer <seu_accessToken>`
+- **Resposta de Sucesso (`200 OK`)**: Retorna um array com os objetos dos livros favoritos.
 
 ---
 
 ## 🗂️ Categorias
 
-Endpoints para gerir as categorias dos livros.
+Endpoints para gerir as categorias dos livros. Rota base: `/api/categorias`.
 
 ### 1. Criar uma Nova Categoria
 
-Cria uma nova categoria de livros.
+- **Endpoint**: **`POST`** `/api/categorias/criar_categ`
+- **Corpo da Requisição**: `{ "nome": "Aventura" }`
+- **Resposta de Sucesso (`201 Created`)**: Retorna o objeto da categoria criada.
 
-- **Endpoint**: **`POST`** `/api/categorias`
-- **Descrição**: Permite adicionar novas categorias como "Ficção Científica", "Romance", "Técnico", etc.
-- **Corpo da Requisição**:
-  ```json
-  {
-    "nome": "Ficção Científica"
-  }
-  ```
-- **Resposta de Sucesso (`201 Created`)**:
-  ```json
-  {
-    "livros": [],
-    "_id": "68507b8ebeb98940dd13b537",
-    "nome": "Ficção Científica",
-    "createdAt": "2025-06-16T20:16:14.728Z"
-  }
-  ```
+### 2. Listar Todas as Categorias (via GET)
 
-### 2. Listar Todas as Categorias
+- **Endpoint**: **`GET`** `/api/categorias/categorias`
+- **Descrição**: Método padrão para listar todas as categorias.
+- **Resposta de Sucesso (`200 OK`)**: Retorna um array com todas as categorias.
 
-Retorna uma lista de todas as categorias e os livros que pertencem a cada uma.
+### 3. Listar Todas as Categorias (via POST)
 
-- **Endpoint**: **`GET`** `/api/categorias`
-- **Descrição**: Ideal para exibir um menu de categorias na aplicação, mostrando os livros de cada uma.
-- **Corpo da Requisição**: Nenhum.
-- **Resposta de Sucesso (`200 OK`)**:
-  ```json
-  [
-    {
-      "_id": "68507b8ebeb98940dd13b537",
-      "nome": "Ficção Científica",
-      "livros": [
-        {
-          "_id": "64fd0abc123def4567890123",
-          "titulo": "Duna"
-        }
-      ],
-      "createdAt": "2025-06-16T20:16:14.728Z"
-    },
-    {
-      "_id": "685080fd155afb14ada0a50f",
-      "nome": "Educacional",
-      "livros": [],
-      "createdAt": "2025-06-16T20:39:25.679Z"
-    }
-  ]
-  ```
+- **Endpoint**: **`POST`** `/api/categorias/find_categ`
+- **Descrição**: Alternativa via `POST` para listar todas as categorias. Pode ser útil se precisar de enviar um corpo na requisição no futuro.
+- **Resposta de Sucesso (`200 OK`)**: Retorna um array com todas as categorias.
 
 ---
 
 ## 📖 Livros
 
-Endpoints para gerir o catálogo de livros.
+Endpoints para gerir e pesquisar o catálogo de livros. Rota base: `/api/livros`.
 
 ### 1. Adicionar um Novo Livro
 
-Adiciona um novo livro à base de dados e associa-o a categorias existentes.
-
-- **Endpoint**: **`POST`** `/api/livros`
-- **Descrição**: Permite registar um livro com todos os seus detalhes.
+- **Endpoint**: **`POST`** `/api/livros/createLivro`
+- **Descrição**: Regista um novo livro na base de dados.
 - **Corpo da Requisição**:
-  `json
-{
-  "titulo": "Clean Code",
-  "imagem_uri": "https://exemplo.com/capa.jpg",
-  "download_link": "https://exemplo.com/livro.pdf",
-  "autores": "Robert C. Martin",
-  "descricao": "Um Manual de Artesanato de Software Ágil. Mesmo um mau código pode funcionar. Mas se o código não for limpo, pode pôr uma organização de joelhos.",
-  "categoria": ["685080fd155afb14ada0a50f"],
-  "publiData": "2008-08-01T00:00:00.000Z",
-  "editora": "Prentice Hall",
-  "lingua": "en",
-  "pag": 464 
-}
-`
-
-  > **Importante**: O campo `categoria` deve ser um **array** contendo os `_id`'s (como strings) das categorias que já existem.
-
-- **Resposta de Sucesso (`201 Created`)**:
-  _A API retorna o objeto completo do livro que acabou de ser criado._
-
-### 2. Listar Todos os Livros
-
-Retorna uma lista de todos os livros no catálogo.
-
-- **Endpoint**: **`GET`** `/api/livros`
-- **Descrição**: Ideal para a página principal da livraria, mostrando todos os livros disponíveis.
-- **Corpo da Requisição**: Nenhum.
-- **Resposta de Sucesso (`200 OK`)**:
   ```json
-  [
-    {
-      "_id": "64fd1234abcd5678efgh9012",
-      "titulo": "Clean Code",
-      "imagem_uri": "https://exemplo.com/capa.jpg",
-      "download_link": "https://exemplo.com/livro.pdf",
-      "autores": "Robert C. Martin",
-      "descricao": "Um Manual de Artesanato de Software Ágil...",
-      "categoria": [
-        {
-          "_id": "685080fd155afb14ada0a50f",
-          "nome": "Educacional"
-        }
-      ],
-      "publiData": "2008-08-01T00:00:00.000Z",
-      "editora": "Prentice Hall",
-      "lingua": "en",
-      "pag": 464
-    }
-  ]
+  {
+    "titulo": "O Senhor dos Anéis",
+    "imagem_uri": "https://exemplo.com/lotr.jpg",
+    "autores": "J.R.R. Tolkien",
+    "descricao": "Uma jornada épica para destruir um anel poderoso...",
+    "categoria": ["id_da_categoria_aqui"]
+    // ...outros campos
+  }
   ```
+- **Resposta de Sucesso (`201 Created`)**: Retorna o objeto completo do livro criado.
+
+### 2. Listar Todos os Livros (com Filtro via URL)
+
+- **Endpoint**: **`GET`** `/api/livros/livros`
+- **Descrição**: Retorna uma lista de livros, aceitando filtros via query string na URL.
+- **Exemplo**: `GET /api/livros/livros?search=Tolkien`
+
+### 3. Pesquisar Livros (com Filtro via Corpo)
+
+- **Endpoint**: **`POST`** `/api/livros/search`
+- **Descrição**: Busca livros com base em critérios enviados no corpo da requisição.
+- **Corpo da Requisição**:
+  ```json
+  {
+    "search": "anel",
+    "categoria": ["id_da_categoria_aqui"]
+  }
+  ```
+- **Resposta de Sucesso (`200 OK`)**: Retorna um array de livros que correspondem aos critérios.
+
+### 4. Listar Livros por Categoria (via ID na URL)
+
+- **Endpoint**: **`POST`** `/api/livros/:categoriaId`
+- **Descrição**: Endpoint não-padrão que lista livros de uma categoria específica, identificada pelo `categoriaId` na URL. Pode ser usado para enviar filtros adicionais no corpo da requisição.
+- **Exemplo de URL**: `POST /api/livros/68507b8ebeb98940dd13b537`
+- **Corpo da Requisição**: Pode ser vazio `{}` ou conter filtros adicionais.
+- **Resposta de Sucesso (`200 OK`)**: Retorna os livros da categoria especificada.
+
+---
+
+## 🔧 Solução de Problemas Comuns (Troubleshooting)
+
+Encontrou um erro? Verifique estas causas comuns.
+
+### Erro: `Não autorizado, o token é necessário.`
+
+- **Causa Provável**: O `Header` de autorização está em falta ou mal formatado.
+- **Solução**: No seu cliente de API (Postman), use a aba **Authorization**, tipo **`Bearer Token`**, e cole o seu `accessToken` lá. Isto garante que o header `Authorization: Bearer <seu_token>` seja enviado corretamente.
+
+### Erro: `Cast to ObjectId failed for value "Nome da Categoria"`
+
+- **Causa Provável**: Você enviou um nome (ex: "Aventura") num campo que espera um `_id` de referência (ex: `"68507b8ebeb98940dd13b537"`).
+- **Solução**: Sempre use o `_id` de um documento para filtros de categoria ou para adicionar um livro favorito.
+
+### Erro: `Cannot destructure property '...' of 'req.body' as it is undefined`
+
+- **Causa Provável**: A sua requisição `POST` não tem o header `Content-Type: application/json`.
+- **Solução**: No seu cliente de API, na aba **Body**, certifique-se de que a opção **`raw`** e o tipo **`JSON`** estão selecionados.
