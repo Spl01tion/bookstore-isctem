@@ -120,5 +120,65 @@ const createProfile = async (req, res) => {
     }
 };
 
+
+
+/**
+ * @desc    Redefinir a senha de um usuário diretamente (para demonstração/admin)
+ * @route   POST /api/users/redefinir-senha
+ * @access  Public/Admin
+ */
+const redefinirSenha = async (req, res) => {
+    // Pega o email e a nova senha do corpo da requisição
+    const { email, novaSenha } = req.body;
+
+    // Validação simples
+    if (!email || !novaSenha) {
+        return res.status(400).json({ message: "Email e nova senha são obrigatórios." });
+    }
+
+    try {
+        // Encontra o usuário pelo email
+        const user = await User.findOne({ email });
+
+        if (!user) {
+            return res.status(404).json({ message: `Usuário com o email ${email} não encontrado.` });
+        }
+
+        // Atualiza a senha diretamente
+        user.password = novaSenha; // Estamos a guardar como texto simples
+
+        await user.save();
+
+        res.status(200).json({ message: `A senha para o usuário ${email} foi redefinida com sucesso.` });
+
+    } catch (error) {
+        console.error("Erro ao redefinir senha:", error);
+        res.status(500).json({ message: 'Erro no servidor.' });
+    }
+};
+
+
+const getUserProfile = async (req, res) => {
+    // O middleware 'protect' já nos dá o req.user
+    // Vamos assumir que temos um middleware ou vamos fazer a lógica aqui
+    // Lógica simples para agora:
+    let token;
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+        try {
+            token = req.headers.authorization.split(' ')[1];
+            const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+            const user = await User.findById(decoded.userId).select('-password');
+            if (!user) {
+                return res.status(404).json({ message: 'Usuário não encontrado' });
+            }
+            res.json(user);
+        } catch (error) {
+            res.status(401).json({ message: 'Não autorizado' });
+        }
+    } else {
+        res.status(401).json({ message: 'Não autorizado, sem token' });
+    }
+};
+
 // --- Export both functions ---
-export { loginOrSignUp, createProfile, getAllUsers };
+export { loginOrSignUp, createProfile, getUserProfile, redefinirSenha, getAllUsers };
