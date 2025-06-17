@@ -1,4 +1,4 @@
-import mongoose,{Schema} from "mongoose";
+import mongoose from "mongoose";
 
 const livroSchema = new mongoose.Schema({
   titulo: {
@@ -8,7 +8,17 @@ const livroSchema = new mongoose.Schema({
     minlength: [1, 'Título deve ter pelo menos 1 caractere'],
     maxlength: [200, 'Título deve ter no máximo 200 caracteres']
   },
-  imagem_uri:{type: String, required: true},
+  imagem_uri: {
+    type: String,
+    required: true
+  },
+  // --- NEW FIELD ADDED HERE ---
+  download_link: {
+    type: String,
+    trim: true,
+    default: null // Making it explicitly optional
+  },
+  // --- END OF NEW FIELD ---
   autores: {
     type: String,
     required: [true, 'Autor é obrigatório'],
@@ -44,7 +54,10 @@ const livroSchema = new mongoose.Schema({
   pag: {
     type: Number,
     min: [1, 'Número de páginas deve ser positivo']
-  },});
-  
-  const Livro = mongoose.model("Livro", livroSchema);
-  export default Livro;
+  },
+});
+
+const Livro = mongoose.model("Livro", livroSchema);
+
+
+export default Livro;
