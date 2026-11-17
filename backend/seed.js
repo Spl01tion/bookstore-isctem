@@ -8,6 +8,7 @@ import { connectDB } from "./config/db.js";
 import User from "./models/userModel.js";
 import Categoria from "./models/categoriaModel.js";
 import Livro from "./models/livroModel.js";
+import bcrypt from "bcryptjs";
 import { slugify } from "./utils/http.js";
 
 const criarAdmin = async () => {
@@ -29,6 +30,31 @@ const criarAdmin = async () => {
     }
     await User.create({ name: "Administrador", username: ADMIN_USERNAME, email: ADMIN_EMAIL, password: ADMIN_PASSWORD, role: "admin" });
     console.log(`Admin "${ADMIN_USERNAME}" criado`);
+};
+
+// Utilizadores do esquema antigo: sem username e com senha em texto simples
+const migrarUtilizadoresAntigos = async () => {
+    const col = User.collection;
+    let n = 0;
+    for await (const u of col.find({ $or: [{ username: { $exists: false } }, { password: { $not: /^\$2[aby]\$/ } }, { role: { $exists: false } }] })) {
+        const set = {};
+        if (!u.username) {
+            const base = (String(u.email || "user").split("@")[0].toLowerCase().replace(/[^a-z0-9._-]/g, "") || "user").padEnd(3, "0").slice(0, 25);
+            let candidato = base;
+            for (let i = 2; await col.findOne({ username: candidato, _id: { $ne: u._id } }); i++) candidato = `${base}${i}`;
+            set.username = candidato;
+        }
+        if (u.password && !/^\$2[aby]\$/.test(u.password)) set.password = await bcrypt.hash(u.password, 10);
+        if (!u.role) set.role = "user";
+        if (u.isActive === undefined) set.isActive = true;
+        if (!Array.isArray(u.addresses)) set.addresses = [];
+        if (Object.keys(set).length) {
+            await col.updateOne({ _id: u._id }, { $set: set });
+            console.log(`Utilizador ${u.email}: ${set.username ? `username "${set.username}"` : ""}${set.password ? " senha cifrada" : ""}`);
+            n++;
+        }
+    }
+    if (n) console.log(`${n} utilizador(es) antigo(s) migrado(s)`);
 };
 
 const migrarLivrosAntigos = async () => {
@@ -96,9 +122,12 @@ const dadosExemplo = async () => {
     console.log(`${livros.length} livros de exemplo inseridos`);
 };
 
+// Os índices só são criados depois da migração (o índice único de username exige que todos o tenham)
+mongoose.set("autoIndex", false);
 await connectDB();
 try {
-    await Promise.all([User.init(), Categoria.init(), Livro.init()]); // garante os índices únicos
+    await migrarUtilizadoresAntigos();
+    await Promise.all([User.createIndexes(), Categoria.createIndexes(), Livro.createIndexes()]);
     await criarAdmin();
     await migrarLivrosAntigos();
     await dadosExemplo();
