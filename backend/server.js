@@ -1,4 +1,5 @@
 import { config } from "./config/env.js"; // tem de ser o primeiro import (carrega o .env)
+import os from "node:os";
 import express from "express";
 import cors from "cors";
 import { connectDB } from "./config/db.js";
@@ -39,9 +40,20 @@ app.get("/", (_req, res) => res.send("Server is Ready"));
 app.use(naoEncontrado);
 app.use(errorHandler);
 
+// IPs da rede local, para usar no EXPO_PUBLIC_API_ENDPOINT do telemóvel
+const ipsLocais = () =>
+    Object.entries(os.networkInterfaces())
+        .filter(([nome]) => !/vEthernet|Virtual|VMware|VirtualBox|Loopback|TAP|Pseudo|WSL|Docker/i.test(nome))
+        .flatMap(([nome, ifaces]) =>
+            (ifaces || []).filter((i) => i.family === "IPv4" && !i.internal).map((i) => ({ nome, ip: i.address }))
+        );
+
 // Só aceita pedidos depois de a base de dados estar ligada
 await connectDB();
 app.listen(config.port, () => {
     console.log(`Servidor em http://localhost:${config.port}${config.apiPrefix}`);
+    for (const { nome, ip } of ipsLocais()) {
+        console.log(`  telemóvel (${nome}): http://${ip}:${config.port}${config.apiPrefix}`);
+    }
     if (adminRouter) console.log(`Painel admin em http://localhost:${config.port}/admin`);
 });

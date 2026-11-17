@@ -54,12 +54,17 @@ Todas as respostas têm o formato `{ code, message, data }`. Prefixo: `/bookstor
 | PUT | `/users/me/password` 🔒 | `{ currentPassword, newPassword }` |
 | POST | `/users/me/addresses` 🔒 | `{ receiverName, receiverPhone, address }` |
 | DELETE | `/users/me/addresses/:id` 🔒 | remover endereço |
+| GET | `/users/me/favorites` 🔒 | livros favoritos |
+| POST | `/users/me/favorites` 🔒 | `{ livroId }` adicionar aos favoritos |
+| DELETE | `/users/me/favorites/:livroId` 🔒 | remover dos favoritos |
 | GET | `/users` 👑 | listar utilizadores |
+| PUT | `/users/:id/password` 👑 | `{ newPassword }` redefinir a senha de um utilizador |
 | GET | `/categories` | listar categorias |
 | GET | `/categories/:slug` | uma categoria |
 | POST/PUT/DELETE | `/categories[/:id]` 👑 | gerir categorias |
 | GET | `/books/list?pageNo&pageSize&categorySlug&search&sortBy` | lista paginada; `sortBy` = `title:asc`, `price:desc`, … |
-| GET | `/books/slug/:slug` · `/books/:id` | um livro |
+| POST | `/books/search` | `{ search?, categoria?: [ids] }` pesquisa com várias categorias |
+| GET | `/books/slug/:slug` · `/books/:id` | um livro (inclui `downloadLink`, se existir) |
 | GET | `/books/category/:categoriaId` | livros de uma categoria |
 | POST/PUT/DELETE | `/books[/:id]` 👑 | gerir livros (DELETE só desactiva) |
 | POST | `/orders` 🔒 | `{ receiverName, receiverPhone, address, paymentMethod, orderDetails: [{ bookId, quantity }] }` |

@@ -6,6 +6,7 @@ import {
     livroPorCategoriaID,
     livroPorId,
     livroPorSlug,
+    pesquisarLivros,
     removerLivro,
 } from "../controllers/livroCtl.js";
 import { autenticar, autorizar } from "../middleware/auth.js";
@@ -14,6 +15,7 @@ const router = express.Router();
 const admin = [autenticar, autorizar("admin")];
 
 router.get("/list", listarLivros);
+router.post("/search", pesquisarLivros);
 router.get("/slug/:slug", livroPorSlug);
 router.get("/category/:categoriaId", livroPorCategoriaID);
 router.get("/:id", livroPorId);

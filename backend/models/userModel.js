@@ -48,7 +48,7 @@ const UserSchema = new Schema(
         avatar: { type: String, default: null },
         isActive: { type: Boolean, default: true },
         addresses: [EnderecoSchema],
-        favorites: [{ type: Schema.Types.ObjectId, ref: "Livro" }],
+        favoritos: [{ type: Schema.Types.ObjectId, ref: "Livro" }], // nome já usado nos dados existentes
         downloads: [{ type: Schema.Types.ObjectId, ref: "Livro" }],
     },
     { timestamps: true }

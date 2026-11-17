@@ -43,6 +43,7 @@ export const livroDTO = (l) => {
         category: categoria,
         publisher: l.editora ? { id: slugify(l.editora), name: l.editora, slug: slugify(l.editora) } : { id: "", name: "—", slug: "" },
         bookImages: (l.imagens || []).map((url, i) => ({ id: `${id}-${i}`, url })),
+        downloadLink: l.download_link ?? null,
         createdAt: iso(l.createdAt),
         updatedAt: iso(l.updatedAt),
     };
@@ -63,7 +64,7 @@ export const userDTO = (u) =>
             receiverPhone: a.receiverPhone,
             address: a.address,
         })),
-        favorites: (u.favorites || []).map(String),
+        favorites: (u.favoritos || []).map((f) => String(f?._id ?? f)),
         createdAt: iso(u.createdAt),
         updatedAt: iso(u.updatedAt),
     };

@@ -24,6 +24,7 @@ const dadosLivro = (b = {}) => {
         desconto: b.discountPercent ?? b.desconto,
         stock: b.stock,
         imagens: b.images ?? b.imagens ?? (b.imagem_uri ? [b.imagem_uri] : undefined),
+        download_link: b.downloadLink ?? b.download_link,
         destaque: b.isFeatured ?? b.destaque,
         activo: b.status ?? b.activo,
     };
@@ -55,6 +56,25 @@ export const listarLivros = async (req, res) => {
     ]);
 
     ok(res, pagina(pg, total, livros.map(livroDTO)));
+};
+
+// POST /books/search  { search?, categoria?: [ids] }  - filtro de várias categorias de uma vez
+export const pesquisarLivros = async (req, res) => {
+    const { search, categoria } = req.body ?? {};
+    const filtro = { activo: true };
+
+    if (search) {
+        const re = new RegExp(escapeRegex(String(search).trim()), "i"); // escapado: evita ReDoS / regex inválida
+        filtro.$or = [{ titulo: re }, { autores: re }];
+    }
+    if (Array.isArray(categoria) && categoria.length > 0) {
+        const ids = categoria.filter((id) => mongoose.isValidObjectId(id));
+        if (ids.length !== categoria.length) throw new AppError(400, "ID de categoria inválido");
+        filtro.categoria = { $in: ids };
+    }
+
+    const livros = await Livro.find(filtro).sort({ titulo: 1 }).limit(100).populate("categoria");
+    ok(res, livros.map(livroDTO));
 };
 
 // GET /books/slug/:slug

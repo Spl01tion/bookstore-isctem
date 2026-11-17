@@ -14,6 +14,7 @@ const livroSchema = new Schema(
             type: [String],
             validate: [(v) => Array.isArray(v) && v.length > 0, "Pelo menos uma imagem é obrigatória"],
         },
+        download_link: { type: String, trim: true, default: null }, // versão digital (opcional)
         autores: {
             type: String,
             required: [true, "Autor é obrigatório"],

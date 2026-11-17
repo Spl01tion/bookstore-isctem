@@ -1,6 +1,8 @@
+import mongoose from "mongoose";
 import User from "../models/userModel.js";
+import Livro from "../models/livroModel.js";
 import { AppError, ok } from "../utils/http.js";
-import { userDTO } from "../utils/dto.js";
+import { livroDTO, userDTO } from "../utils/dto.js";
 
 // POST /users/add  { name, username, email, password }
 // O papel (role) nunca vem do cliente: todo o registo público é "user".
@@ -52,6 +54,46 @@ export const removerEndereco = async (req, res) => {
     endereco.deleteOne();
     await req.user.save();
     ok(res, userDTO(req.user), "Endereço removido");
+};
+
+// GET /users/me/favorites
+export const listarFavoritos = async (req, res) => {
+    await req.user.populate({ path: "favoritos", match: { activo: true }, populate: { path: "categoria" } });
+    ok(res, req.user.favoritos.filter(Boolean).map(livroDTO));
+};
+
+// POST /users/me/favorites  { livroId }  (aceita também bookId)
+export const adicionarFavorito = async (req, res) => {
+    const livroId = req.body?.livroId ?? req.body?.bookId;
+    if (!mongoose.isValidObjectId(livroId)) throw new AppError(400, "ID do livro inválido");
+    if (!(await Livro.exists({ _id: livroId, activo: true }))) throw new AppError(404, "Livro não encontrado");
+
+    await User.updateOne({ _id: req.user._id }, { $addToSet: { favoritos: livroId } });
+    const user = await User.findById(req.user._id);
+    ok(res, userDTO(user).favorites, "Livro adicionado aos favoritos");
+};
+
+// DELETE /users/me/favorites/:livroId
+export const removerFavorito = async (req, res) => {
+    const { livroId } = req.params;
+    if (!mongoose.isValidObjectId(livroId)) throw new AppError(400, "ID do livro inválido");
+
+    await User.updateOne({ _id: req.user._id }, { $pull: { favoritos: livroId } });
+    const user = await User.findById(req.user._id);
+    ok(res, userDTO(user).favorites, "Livro removido dos favoritos");
+};
+
+// PUT /users/:id/password  (admin)  { newPassword }
+// Substitui o antigo POST /redefinir-senha, que deixava qualquer pessoa mudar a senha de outra só com o email.
+export const redefinirSenha = async (req, res) => {
+    const { newPassword } = req.body ?? {};
+    if (!newPassword) throw new AppError(400, "Nova senha é obrigatória");
+
+    const user = await User.findById(req.params.id);
+    if (!user) throw new AppError(404, "Utilizador não encontrado");
+    user.password = newPassword;
+    await user.save();
+    ok(res, null, `Senha de ${user.username} redefinida`);
 };
 
 // GET /users  (admin)
