@@ -1,10 +1,14 @@
 import express from "express";
-import { loginOrSignUp, createProfile, redefinirSenha, getAllUsers } from "../controllers/userCtl.js";
+import { register, login, refresh, profile, redefinirSenha } from "../controllers/userCtl.js";
+import { verifyToken, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
 
-router.post('/login', loginOrSignUp);
-router.post('/signup', createProfile);
-router.get('/users', getAllUsers);
-router.post('/redefinir-senha', redefinirSenha);
+router.post('/register', register);
+router.post('/signup', register); // nome usado pelo frontend
+router.post('/login', login);
+router.post('/refresh', refresh);
+router.get('/profile', verifyToken, profile);
+router.post('/redefinir-senha', verifyToken, requireRole('admin'), redefinirSenha);
+
 export default router;

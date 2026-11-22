@@ -1,0 +1,6 @@
+app/
+└── (debug)/
+    ├── _layout.jsx          <-- O nosso novo layout do Drawer
+    ├── login.jsx            <-- Atalho para a tela de login
+    ├── home.jsx             <-- Atalho para a tela de início
+    └── favoritos.jsx        <-- Atalho para a tela de favoritos

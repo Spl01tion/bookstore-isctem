@@ -4,7 +4,12 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon backend/server.js",
+<<<<<<< HEAD
+    "create-admin": "node backend/scripts/createAdmin.js",
+    "seed:livros": "node backend/scripts/seedLivrosGratuitos.js"
+=======
     "ds": "nodemon backend/server.js"
+>>>>>>> master
   },
   "type": "module",
   "keywords": [],
@@ -12,9 +17,20 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+<<<<<<< HEAD
+    "@adminjs/express": "^6.1.1",
+    "@adminjs/mongoose": "^4.1.0",
+    "@adminjs/themes": "^1.0.1",
+    "adminjs": "^7.6.1",
+    "bcryptjs": "^2.4.3",
+    "connect-mongodb-session": "^5.0.0",
+=======
     "body-parser": "^2.2.0",
+>>>>>>> master
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
+    "express-formidable": "^1.2.0",
+    "express-session": "^1.18.1",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.15.1"
   },

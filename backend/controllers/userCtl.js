@@ -1,184 +1,139 @@
 import jwt from "jsonwebtoken";
 import User from "../models/userModel.js";
 
-const generateTokens = (user) => { // 
+const ACCESS_EXPIRES = process.env.ACCESS_TOKEN_EXPIRES || "15m";
+const REFRESH_EXPIRES = process.env.REFRESH_TOKEN_EXPIRES || "7d";
+
+const generateTokens = (user) => {
+    const userId = user._id.toString();
+
     const accessToken = jwt.sign(
-        { userId: user?._id },
+        { userId, role: user.role, type: "access" },
         process.env.ACCESS_TOKEN_SECRET,
-        { expiresIn: "2d" }
+        { expiresIn: ACCESS_EXPIRES, algorithm: "HS256" }
     );
 
     const refreshToken = jwt.sign(
-        { userId: user?._id },
+        { userId, type: "refresh" },
         process.env.REFRESH_TOKEN_SECRET,
-        { expiresIn: "7d" }
+        { expiresIn: REFRESH_EXPIRES, algorithm: "HS256" }
     );
 
     return { accessToken, refreshToken };
-}
-
-const loginOrSignUp = async (req, res) => {
-    const { email, role } = req.body;
-
-    try {
-        let user = await User.findOne({ email });
-
-        if (!user) {
-            user = new User({ role, email });
-            await user.save();
-        } else {
-            user.role = role;
-            await user.save();
-        }
-
-        const { accessToken, refreshToken } = generateTokens(user.toObject()); // Fixed destructuring
-
-        res.status(200).json({
-            user,
-            accessToken,
-            refreshToken,
-        });
-    } catch (error) {
-        console.log(error);
-        res.status(500).json({ error: error.message });
-    }
-}
-
-
-
-// --- NEW: The getAllUsers endpoint controller ---
-const getAllUsers = async (req, res) => {
-    try {
-        // 1. Fetch all users from the database.
-        // The .select('-password') method explicitly excludes the password field.
-        // This is a more robust way than deleting it from the object later.
-        const users = await User.find({}).select('-password');
-
-        // 2. Check if any users were found
-        if (!users || users.length === 0) {
-            return res.status(404).json({ message: "No users found." });
-        }
-
-        // 3. Send the successful response
-        res.status(200).json(users);
-
-    } catch (error) {
-        console.error("Error in getAllUsers:", error);
-        res.status(500).json({ message: "Internal Server Error" });
-    }
 };
 
+// POST /register  (alias: /signup)
+const register = async (req, res) => {
+    const { name, email, password } = req.body ?? {};
 
-// --- NEW: The createProfile endpoint you requested ---
-
-const createProfile = async (req, res) => {
-    const { name, email, password } = req.body;
-
-    // 1. Basic Validation
     if (!name || !email || !password) {
-        return res.status(400).json({ message: "Name, email, and password are required." });
+        return res.status(400).json({ success: false, message: "Nome, email e password são obrigatórios" });
     }
 
     try {
-        // 2. Check if user already exists
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(409).json({ message: "An account with this email already exists." });
-        }
+        // O role NUNCA vem do cliente: novos registos são sempre 'user'
+        const user = await User.create({ name, email, password, role: "user" });
+        const tokens = generateTokens(user);
 
-        // 3. Create a new user with the plain text password (No Hashing)
-        const newUser = new User({
-            name,
-            email,
-            password: password, // <-- The password is saved directly as text
-        });
-
-        // 4. Save the new user to the database
-        await newUser.save();
-
-        // 5. Generate JWT tokens
-        const { accessToken, refreshToken } = generateTokens(newUser);
-
-        // 6. Prepare user object for response (still important not to send the password)
-        const userResponse = newUser.toObject();
-        delete userResponse.password;
-
-        // 7. Send the successful response
-        res.status(201).json({
-            message: "User created successfully!",
-            user: userResponse,
-            accessToken,
-            refreshToken,
-        });
-
+        res.status(201).json({ success: true, user, ...tokens });
     } catch (error) {
-        if (error.name === 'ValidationError') {
-            return res.status(400).json({ message: "Validation Error", details: error.message });
+        if (error.code === 11000) {
+            // Só é "email já registado" se o índice que falhou for o do email
+            if (error.keyPattern?.email) {
+                return res.status(409).json({ success: false, message: "Email já registado" });
+            }
+            console.error("Chave duplicada inesperada no registo:", error.keyPattern);
+            return res.status(500).json({ success: false, message: "Erro ao registar utilizador" });
         }
-        console.error("Error in createProfile:", error);
-        res.status(500).json({ message: "Internal Server Error" });
+        if (error.name === "ValidationError") {
+            const message = Object.values(error.errors).map((e) => e.message).join(", ");
+            return res.status(400).json({ success: false, message });
+        }
+        console.error(error);
+        res.status(500).json({ success: false, message: "Erro ao registar utilizador" });
     }
 };
 
+// POST /login
+const login = async (req, res) => {
+    const { email, password } = req.body ?? {};
 
-
-/**
- * @desc    Redefinir a senha de um usuário diretamente (para demonstração/admin)
- * @route   POST /api/users/redefinir-senha
- * @access  Public/Admin
- */
-const redefinirSenha = async (req, res) => {
-    // Pega o email e a nova senha do corpo da requisição
-    const { email, novaSenha } = req.body;
-
-    // Validação simples
-    if (!email || !novaSenha) {
-        return res.status(400).json({ message: "Email e nova senha são obrigatórios." });
+    if (typeof email !== "string" || typeof password !== "string" || !email || !password) {
+        return res.status(400).json({ success: false, message: "Email e password são obrigatórios" });
     }
 
     try {
-        // Encontra o usuário pelo email
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email: email.toLowerCase().trim() }).select("+password");
 
-        if (!user) {
-            return res.status(404).json({ message: `Usuário com o email ${email} não encontrado.` });
+        // Mesma mensagem para email inexistente e password errada
+        if (!user || !(await user.comparePassword(password))) {
+            return res.status(401).json({ success: false, message: "Credenciais inválidas" });
         }
 
-        // Atualiza a senha diretamente
-        user.password = novaSenha; // Estamos a guardar como texto simples
+        const tokens = generateTokens(user);
+        res.status(200).json({ success: true, user, ...tokens });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: "Erro ao iniciar sessão" });
+    }
+};
 
-        await user.save();
+// POST /refresh  { refreshToken }
+const refresh = async (req, res) => {
+    const { refreshToken } = req.body ?? {};
 
-        res.status(200).json({ message: `A senha para o usuário ${email} foi redefinida com sucesso.` });
+    if (!refreshToken) {
+        return res.status(400).json({ success: false, message: "Refresh token em falta" });
+    }
 
+    try {
+        const payload = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, { algorithms: ["HS256"] });
+        if (payload.type !== "refresh" || !payload.userId) {
+            return res.status(401).json({ success: false, message: "Refresh token inválido" });
+        }
+
+        const user = await User.findById(payload.userId);
+        if (!user) {
+            return res.status(401).json({ success: false, message: "Utilizador já não existe" });
+        }
+
+        res.status(200).json({ success: true, ...generateTokens(user) });
+    } catch (error) {
+        const message = error.name === "TokenExpiredError" ? "Refresh token expirado" : "Refresh token inválido";
+        res.status(401).json({ success: false, message });
+    }
+};
+
+// GET /profile  (requer verifyToken)
+const profile = (req, res) => {
+    res.status(200).json({ success: true, user: req.user });
+};
+
+// POST /redefinir-senha  { email, novaSenha }  (apenas admin)
+const redefinirSenha = async (req, res) => {
+    const { email, novaSenha } = req.body ?? {};
+
+    if (typeof email !== "string" || typeof novaSenha !== "string" || !email || !novaSenha) {
+        return res.status(400).json({ success: false, message: "Email e nova senha são obrigatórios." });
+    }
+    if (novaSenha.length < 6) {
+        return res.status(400).json({ success: false, message: "A nova senha deve ter pelo menos 6 caracteres." });
+    }
+
+    try {
+        const user = await User.findOne({ email: email.toLowerCase().trim() });
+        if (!user) {
+            return res.status(404).json({ success: false, message: "Utilizador não encontrado." });
+        }
+
+        user.password = novaSenha; // o hook pre('save') do modelo aplica o hash bcrypt
+        await user.save({ validateModifiedOnly: true });
+
+        res.status(200).json({ success: true, message: `A senha de ${user.email} foi redefinida.` });
     } catch (error) {
         console.error("Erro ao redefinir senha:", error);
-        res.status(500).json({ message: 'Erro no servidor.' });
+        res.status(500).json({ success: false, message: "Erro ao redefinir a senha." });
     }
 };
 
-
-const getUserProfile = async (req, res) => {
-    // O middleware 'protect' já nos dá o req.user
-    // Vamos assumir que temos um middleware ou vamos fazer a lógica aqui
-    // Lógica simples para agora:
-    let token;
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-        try {
-            token = req.headers.authorization.split(' ')[1];
-            const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-            const user = await User.findById(decoded.userId).select('-password');
-            if (!user) {
-                return res.status(404).json({ message: 'Usuário não encontrado' });
-            }
-            res.json(user);
-        } catch (error) {
-            res.status(401).json({ message: 'Não autorizado' });
-        }
-    } else {
-        res.status(401).json({ message: 'Não autorizado, sem token' });
-    }
-};
-
-// --- Export both functions ---
-export { loginOrSignUp, createProfile, getUserProfile, redefinirSenha, getAllUsers };
+export { register, login, refresh, profile, redefinirSenha };

@@ -1,11 +1,11 @@
 import express from "express";
-import { createCategoria, getAllCategorias, todasCategorias } from "../controllers/categoriaCtl.js";
+import { todasCategorias, getAllCategorias, createCategoria } from "../controllers/categoriaCtl.js";
+import { verifyToken, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
 
-router.post('/find_categ', todasCategorias);
-router.post('/criar_categ', createCategoria);
-router.get('/categorias', getAllCategorias);
-
+router.get('/categorias', verifyToken, getAllCategorias);
+router.post('/categorias', verifyToken, requireRole('admin'), createCategoria);
+router.post('/categoria', verifyToken, todasCategorias); // rota original
 
 export default router;

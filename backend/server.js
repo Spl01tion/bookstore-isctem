@@ -1,76 +1,46 @@
-
-import os from 'os';
-
-
+import 'dotenv/config';
 import express from 'express';
-import dotenv from "dotenv";
 import { connectDB } from './config/db.js';
 import userRoutes from './routes/user.js';
 import categoriaRoutes from './routes/categoria.js';
 import livroRoutes from './routes/livro.js';
 
-dotenv.config();
+for (const key of ['MONGO_URI', 'ACCESS_TOKEN_SECRET', 'REFRESH_TOKEN_SECRET']) {
+    if (!process.env[key]) {
+        console.error(`Variável ${key} em falta no .env`);
+        process.exit(1);
+    }
+}
+
 const app = express();
+const PORT = process.env.PORT || 5000;
 
 app.use(express.json());
 
 //Rotas
-app.use(userRoutes);
-app.use(categoriaRoutes);
-app.use(livroRoutes);
+app.use('/user',userRoutes);
+app.use('/',userRoutes); // o frontend chama /login, /signup e /profile na raiz
+app.use('/',categoriaRoutes); // /categorias, /categoria
+app.use('/',livroRoutes);     // /livros, /search, /fav, /addfav, /delfav, /createLivro, /updateLivro, /livro/:categoriaId
 
+app.get("/", (req,res) =>{
+    res.send("Server is Ready");
+});
 
-
-function getLocalIPAddress() {
-    const interfaces = os.networkInterfaces();
-    const results = [];
-
-    for (const name in interfaces) {
-        for (const iface of interfaces[name]) {
-            if (
-                iface.family === 'IPv4' &&
-                !iface.internal &&
-                !/vEthernet|Virtual|VMware|Loopback|TAP|Pseudo/i.test(name)
-            ) {
-                //  console.log(`Interface: ${name}, Address: ${iface.address}`);
-                results.push({ name, address: iface.address });
-            }
-        }
+// Erros não tratados: resposta JSON, sem stack trace para o cliente
+app.use((err, req, res, next) => {
+    if (err.type === 'entity.parse.failed') {
+        return res.status(400).json({ success: false, message: 'JSON inválido' });
     }
-
-    // console.log(results);
-    // wifi aqu
-
-    let my_custom_netAdress = results.filter((el) => {
-        return el.name == 'Wi-Fi';
-    })[0].address;
-
-    console.log(my_custom_netAdress);
-    // return results;
-    return my_custom_netAdress;
-}
-app.use(express.json());
-
-//See
-app.get("/", (req, res) => {
-    res.json({ message: "Server is Ready" });
+    console.error(err);
+    res.status(err.status || 500).json({ success: false, message: 'Erro interno do servidor' });
 });
 
-console.log(process.env.MONGO_URI);
+const start = async () => {
+    await connectDB();
+    app.listen(PORT, () => {
+        console.log(`Server started at http://localhost:${PORT}`);
+    });
+};
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    connectDB();
-
-    const ip = getLocalIPAddress();
-    console.log("Rede pra cell abaixo");
-    console.log(`http://${ip}:${PORT}`);
-    console.log("Rede pro pc");
-
-    console.log(`Server started at http://localhost:${PORT}`);
-
-});
-
-
-//
-//
+start();

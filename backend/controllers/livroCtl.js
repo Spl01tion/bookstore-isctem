@@ -1,335 +1,231 @@
+import mongoose from "mongoose";
 import Livro from "../models/livroModel.js";
 import Categoria from "../models/categoriaModel.js";
-import mongoose from "mongoose";
-import jwt from "jsonwebtoken"
 import User from "../models/userModel.js";
-const livroPorCategoriaID = async (req, res) => {
 
+const { isValidObjectId } = mongoose;
+
+// Campos que o cliente pode definir num livro (evita gravar campos arbitrários)
+const CAMPOS_LIVRO = ['titulo', 'imagem_uri', 'download_link', 'autores', 'descricao', 'categoria', 'publiData', 'editora', 'lingua', 'pag'];
+
+const pick = (obj, keys) =>
+    Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
+
+const toIdArray = (value) => (Array.isArray(value) ? value : value ? [value] : []);
+
+const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const handleError = (res, error, contexto) => {
+    if (error.name === 'ValidationError') {
+        const message = Object.values(error.errors).map((e) => e.message).join(', ');
+        return res.status(400).json({ success: false, message });
+    }
+    if (error.name === 'CastError') {
+        return res.status(400).json({ success: false, message: `Valor inválido para ${error.path}` });
+    }
+    console.error(`Erro em ${contexto}:`, error);
+    res.status(500).json({ success: false, message: 'Erro interno do servidor' });
+};
+
+/**
+ * POST /livro/:categoriaId — livros de uma categoria (rota original)
+ */
+const livroPorCategoriaID = async (req, res) => {
     const { categoriaId } = req.params;
+    if (!isValidObjectId(categoriaId)) {
+        return res.status(400).json({ success: false, message: "ID de categoria inválido" });
+    }
 
     try {
         const livros = await Livro.find({ categoria: categoriaId });
 
-        if (!livros || livros.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "Nenhum livro encontrado"
-            });
+        if (livros.length === 0) {
+            return res.status(404).json({ success: false, message: "Nenhum livro encontrado" });
         }
-        res.status(200).json({
-            success: true,
-            livros,
-        });
+        res.status(200).json({ success: true, livros });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: "Falha ao buscar livros",
-            error: error.message,
-        })
-    }
-};
-
-
-/**
- * @desc    Register a new book
- * @route   POST /createLivro
- * @body    {titulo, imagem_uri, download_link, autores, descricao, categoria, publiData, editora, lingua, pag}
- * @access  Private/Admin
- */
-
-
-const createLivro = async (req, res) => {
-    const {
-        titulo, imagem_uri, download_link, autores, descricao,
-        categoria: categoriaIds,
-        publiData, editora, lingua, pag
-    } = req.body;
-
-    if (!titulo || !autores || !descricao || !categoriaIds || !categoriaIds.length) {
-        return res.status(400).json({ message: 'Título, autores, descrição e pelo menos uma categoria são obrigatórios.' });
-    }
-
-    try {
-        // Step 1: Create and save the new book
-        const newLivro = new Livro({
-            titulo, imagem_uri, download_link, autores, descricao,
-            categoria: categoriaIds,
-            publiData, editora, lingua, pag
-        });
-
-        const savedLivro = await newLivro.save();
-
-        // Step 2: Update the categories
-        // This is a separate operation. If it fails, the book will still exist.
-        if (savedLivro) {
-            await Categoria.updateMany(
-                { '_id': { $in: savedLivro.categoria } },
-                { $push: { 'livros': savedLivro._id } }
-            );
-        }
-
-        res.status(201).json(savedLivro);
-
-    } catch (error) {
-        console.error("Error in createLivro:", error);
-        if (error.name === 'ValidationError') {
-            return res.status(400).json({ message: "Validation Error", details: error.message });
-        }
-        res.status(500).json({ message: "Internal Server Error" });
+        handleError(res, error, 'livroPorCategoriaID');
     }
 };
 
 /**
- * @desc    Fetch all books
- * @route   GET /api/livros
- * @access  Public
+ * GET /livros — todos os livros (array), com o nome das categorias
  */
 const getAllLivros = async (req, res) => {
     try {
-        // Fetch all books and populate the 'categoria' field with the category name
         const livros = await Livro.find({}).populate('categoria', 'nome');
-
-        if (!livros || livros.length === 0) {
-            return res.status(404).json({ message: "Nenhum livro encontrado." });
-        }
-
         res.status(200).json(livros);
-
     } catch (error) {
-        console.error("Error in getAllLivros:", error);
-        res.status(500).json({ message: "Internal Server Error" });
+        handleError(res, error, 'getAllLivros');
     }
 };
 
-
-
 /**
- * @desc    Search/filter books using request body
- * @route   POST /search
- * @access  Public
+ * POST /search — body: { search?: string, categoria?: string[] }
  */
-
 const searchLivros = async (req, res) => {
+    const { search, categoria } = req.body ?? {};
+    const filter = {};
+
+    if (typeof search === 'string' && search.trim()) {
+        const regex = new RegExp(escapeRegex(search.trim()), 'i');
+        filter.$or = [{ titulo: regex }, { autores: regex }];
+    }
+
+    const categorias = toIdArray(categoria).filter(isValidObjectId);
+    if (categorias.length > 0) {
+        filter.categoria = { $in: categorias };
+    }
+
     try {
-        const filter = {};
-        const { search, categoria } = req.body;
-
-        // --- LÓGICA DE BUSCA COM REGEX ---
-        if (search) {
-            // Cria uma expressão regular para fazer uma busca parcial e case-insensitive ('i')
-            const regex = new RegExp(search, 'i');
-
-            // Procura o texto de busca tanto no título QUANTO nos autores
-            // O operador $or significa: "encontre documentos onde o título corresponde OU o autor corresponde"
-            filter.$or = [
-                { titulo: { $regex: regex } },
-                { autores: { $regex: regex } }
-            ];
-        }
-        // --- FIM DA LÓGICA DE BUSCA ---
-
-        if (categoria && categoria.length > 0) {
-            // Esta parte continua igual, esperando um array de IDs de categoria
-            filter.categoria = { $in: categoria };
-        }
-
         const livros = await Livro.find(filter).populate('categoria', 'nome');
-
         res.status(200).json(livros);
-
     } catch (error) {
-        console.error("Erro na busca de livros via body:", error);
-        res.status(500).json({ message: "Erro ao processar a sua busca.", error: error.message });
+        handleError(res, error, 'searchLivros');
     }
 };
 
-
-
 /**
- * @desc    Get the logged-in user's favorite books (versão simples)
- * @route   GET /api/users/favorites
- * @access  Private
+ * POST /createLivro — apenas admin
  */
-const getFavoriteBooks = async (req, res) => {
-    let token;
+const createLivro = async (req, res) => {
+    const dados = pick(req.body ?? {}, CAMPOS_LIVRO);
+    dados.categoria = toIdArray(dados.categoria);
 
-    // 1. Tenta encontrar o token no header
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-        try {
-            // 2. Extrai o token
-            token = req.headers.authorization.split(' ')[1];
+    if (!dados.titulo || !dados.autores || !dados.descricao || !dados.imagem_uri || dados.categoria.length === 0) {
+        return res.status(400).json({
+            success: false,
+            message: 'Título, autores, descrição, imagem e pelo menos uma categoria são obrigatórios.'
+        });
+    }
+    if (!dados.categoria.every(isValidObjectId)) {
+        return res.status(400).json({ success: false, message: 'ID de categoria inválido.' });
+    }
+    if (!dados.pag) delete dados.pag; // o frontend envia 0 quando o campo está vazio
 
-            // 3. Verifica e decodifica o token para obter o ID do usuário
-            const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-
-            // 4. Busca o usuário e popula a sua lista de favoritos numa única query
-            const user = await User.findById(decoded.userId).populate({
-                path: 'favoritos', // O nome do campo no Schema do Usuário
-                select: 'titulo imagem_uri autores' // Pega apenas os campos que nos interessam do livro
-            });
-
-            // Se o usuário não for encontrado (ex: foi apagado), retorna um erro
-            if (!user) {
-                return res.status(404).json({ message: 'Usuário não encontrado.' });
-            }
-
-            // 5. Retorna a lista de livros favoritos
-            res.status(200).json(user.favoritos);
-
-        } catch (error) {
-            // Se o token for inválido ou expirado
-            res.status(401).json({ message: 'Token inválido ou expirado.' });
+    try {
+        const existentes = await Categoria.countDocuments({ _id: { $in: dados.categoria } });
+        if (existentes !== dados.categoria.length) {
+            return res.status(400).json({ success: false, message: 'Categoria não encontrada.' });
         }
-    } else {
-        // Se nenhum token for enviado na requisição
-        res.status(401).json({ message: 'Não autorizado, o token é necessário.' });
+
+        const livro = await Livro.create(dados);
+        await Categoria.updateMany(
+            { _id: { $in: livro.categoria } },
+            { $addToSet: { livros: livro._id } }
+        );
+
+        res.status(201).json(livro);
+    } catch (error) {
+        handleError(res, error, 'createLivro');
     }
 };
 
-
-
 /**
- * @desc    Adicionar um livro à lista de favoritos do usuário
- * @route   POST /api/users/favorites
- * @access  Private
- */
-const addFavoriteBook = async (req, res) => {
-    // Pega o livroId do corpo da requisição
-    const { livroId } = req.body;
-    let token;
-
-    // 1. Verifica se o livroId foi enviado
-    if (!livroId) {
-        return res.status(400).json({ message: "O ID do livro é obrigatório." });
-    }
-
-    // 2. Autentica o usuário (mesma lógica do getFavoriteBooks)
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-        try {
-            token = req.headers.authorization.split(' ')[1];
-            const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-            const userId = decoded.userId;
-
-            // 3. Adiciona o livro aos favoritos usando $addToSet
-            // $addToSet é perfeito aqui: ele só adiciona o ID se ele ainda não existir na lista,
-            // evitando duplicados. É uma operação atómica e eficiente.
-            const updatedUser = await User.findByIdAndUpdate(
-                userId,
-                { $addToSet: { favoritos: livroId } },
-                { new: true, select: 'favoritos' } // Retorna o documento atualizado, apenas o campo 'favoritos'
-            );
-
-            // Se o usuário não for encontrado
-            if (!updatedUser) {
-                return res.status(404).json({ message: "Usuário não encontrado." });
-            }
-
-            // 4. Envia uma resposta de sucesso
-            res.status(200).json({
-                message: "Livro adicionado aos favoritos com sucesso!",
-                favoritos: updatedUser.favoritos // Retorna a lista atualizada de IDs
-            });
-
-        } catch (error) {
-            res.status(401).json({ message: 'Token inválido ou expirado.' });
-        }
-    } else {
-        res.status(401).json({ message: 'Não autorizado, o token é necessário.' });
-    }
-};
-
-
-
-/**
- * @desc    Remover um livro da lista de favoritos do usuário
- * @route   DELETE /api/users/favorites/:livroId
- * @access  Private
- */
-const removeFavoriteBook = async (req, res) => {
-    // Pega o livroId dos parâmetros da URL
-    const { livroId } = req.params;
-    let token;
-    console.log("livroId:", livroId);
-    // Autentica o usuário (lógica que já temos)
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-        try {
-            token = req.headers.authorization.split(' ')[1];
-            const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-            const userId = decoded.userId;
-
-            // Usa $pull para remover um item de um array
-            // $pull é o oposto do $push ou $addToSet
-            const updatedUser = await User.findByIdAndUpdate(
-                userId,
-                { $pull: { favoritos: livroId } },
-                { new: true, select: 'favoritos' } // Retorna o documento atualizado
-            );
-
-            if (!updatedUser) {
-                return res.status(404).json({ message: "Usuário não encontrado." });
-            }
-
-            res.status(200).json({
-                message: "Livro removido dos favoritos com sucesso!",
-                favoritos: updatedUser.favoritos
-            });
-
-        } catch (error) {
-            res.status(401).json({ message: 'Token inválido ou expirado.' });
-        }
-    } else {
-        res.status(401).json({ message: 'Não autorizado, o token é necessário.' });
-    }
-};
-
-
-
-
-/**
- * @desc    Atualizar (editar) um livro existente
- * @route   PUT /api/livros/:id
- * @access  Private/Admin
+ * PUT /updateLivro/:id — apenas admin
  */
 const updateLivro = async (req, res) => {
-    // 1. Pega o ID do livro dos parâmetros da URL
     const { id } = req.params;
-    // 2. Pega todos os dados a serem atualizados do corpo da requisição
-    const updateData = req.body;
+    if (!isValidObjectId(id)) {
+        return res.status(400).json({ success: false, message: 'ID do livro inválido.' });
+    }
+
+    const dados = pick(req.body ?? {}, CAMPOS_LIVRO);
+    if (dados.categoria !== undefined) {
+        dados.categoria = toIdArray(dados.categoria);
+        if (dados.categoria.length === 0 || !dados.categoria.every(isValidObjectId)) {
+            return res.status(400).json({ success: false, message: 'Categoria inválida.' });
+        }
+    }
 
     try {
-        // 3. Encontra o livro pelo ID e o atualiza
-        // O método findByIdAndUpdate é perfeito para isso.
-        // O argumento { new: true } garante que a resposta retorne o documento *após* a atualização.
-        const livroAtualizado = await Livro.findByIdAndUpdate(id, updateData, {
-            new: true,
-            runValidators: true // Garante que as validações do schema (ex: minlength) sejam aplicadas
-        });
-
-        // 4. Se nenhum livro com esse ID for encontrado
-        if (!livroAtualizado) {
-            return res.status(404).json({ message: "Livro não encontrado." });
+        const anterior = await Livro.findById(id).select('categoria');
+        if (!anterior) {
+            return res.status(404).json({ success: false, message: 'Livro não encontrado.' });
         }
 
-        // --- Lógica Adicional Opcional: Atualizar Categorias ---
-        // Se a categoria do livro foi alterada, pode ser necessário atualizar
-        // as coleções de Categoria para remover o livro da categoria antiga
-        // e adicionar à nova. Por agora, vamos manter simples.
+        const livro = await Livro.findByIdAndUpdate(id, dados, { new: true, runValidators: true });
 
-        // 5. Envia o livro atualizado como resposta
-        res.status(200).json(livroAtualizado);
+        // Mantém a lista `livros` das categorias sincronizada
+        if (dados.categoria) {
+            const antes = anterior.categoria.map(String);
+            const depois = livro.categoria.map(String);
+            const removidas = antes.filter((c) => !depois.includes(c));
+            const adicionadas = depois.filter((c) => !antes.includes(c));
+            if (removidas.length) await Categoria.updateMany({ _id: { $in: removidas } }, { $pull: { livros: livro._id } });
+            if (adicionadas.length) await Categoria.updateMany({ _id: { $in: adicionadas } }, { $addToSet: { livros: livro._id } });
+        }
 
+        res.status(200).json(livro);
     } catch (error) {
-        // Trata erros, incluindo erros de validação
-        if (error.name === 'ValidationError') {
-            return res.status(400).json({ message: "Erro de Validação", details: error.message });
-        }
-        if (error.name === 'CastError') {
-            return res.status(400).json({ message: `ID do livro inválido: ${id}` });
-        }
-        console.error("Erro ao atualizar livro:", error);
-        res.status(500).json({ message: "Erro no servidor ao atualizar o livro." });
+        handleError(res, error, 'updateLivro');
     }
 };
 
+/**
+ * GET /fav — livros favoritos do utilizador autenticado
+ */
+const getFavoriteBooks = async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id).populate({
+            path: 'favoritos',
+            select: 'titulo imagem_uri imagens autores',
+        });
+        res.status(200).json(user?.favoritos ?? []);
+    } catch (error) {
+        handleError(res, error, 'getFavoriteBooks');
+    }
+};
 
-export { livroPorCategoriaID, updateLivro, removeFavoriteBook, getAllLivros, createLivro, getFavoriteBooks, searchLivros, addFavoriteBook };
+/**
+ * POST /addfav — body: { livroId }
+ */
+const addFavoriteBook = async (req, res) => {
+    const { livroId } = req.body ?? {};
+    if (!livroId || !isValidObjectId(livroId)) {
+        return res.status(400).json({ success: false, message: "O ID do livro é obrigatório." });
+    }
+
+    try {
+        if (!(await Livro.exists({ _id: livroId }))) {
+            return res.status(404).json({ success: false, message: "Livro não encontrado." });
+        }
+
+        const user = await User.findByIdAndUpdate(
+            req.user._id,
+            { $addToSet: { favoritos: livroId } },
+            { new: true, select: 'favoritos' }
+        );
+
+        res.status(200).json({ message: "Livro adicionado aos favoritos com sucesso!", favoritos: user.favoritos });
+    } catch (error) {
+        handleError(res, error, 'addFavoriteBook');
+    }
+};
+
+/**
+ * DELETE /delfav/:livroId
+ */
+const removeFavoriteBook = async (req, res) => {
+    const { livroId } = req.params;
+    if (!isValidObjectId(livroId)) {
+        return res.status(400).json({ success: false, message: "ID do livro inválido." });
+    }
+
+    try {
+        const user = await User.findByIdAndUpdate(
+            req.user._id,
+            { $pull: { favoritos: livroId } },
+            { new: true, select: 'favoritos' }
+        );
+
+        res.status(200).json({ message: "Livro removido dos favoritos com sucesso!", favoritos: user.favoritos });
+    } catch (error) {
+        handleError(res, error, 'removeFavoriteBook');
+    }
+};
+
+export {
+    livroPorCategoriaID, getAllLivros, searchLivros, createLivro, updateLivro,
+    getFavoriteBooks, addFavoriteBook, removeFavoriteBook,
+};
