@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Dependências
 node_modules/
 
@@ -25,6 +24,3 @@ coverage/
 Thumbs.db
 .vscode/
 .idea/
-=======
-node_modules/
->>>>>>> master
