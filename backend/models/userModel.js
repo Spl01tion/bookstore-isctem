@@ -5,7 +5,7 @@ const SALT_ROUNDS = 10;
 const BCRYPT_HASH = /^\$2[aby]\$\d{2}\$/;
 
 const UserSchema = new Schema({
-    name: {
+  name: {
     type: String,
     required: [true, 'Nome é obrigatório'],
     trim: true,
@@ -35,36 +35,16 @@ const UserSchema = new Schema({
     type: String,
     default: null
   },
-  favoritos: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Livro' }],
-  downloads: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Livro' }],
   createdAt: {
     type: Date,
     default: Date.now
-    }
-
+    },
+  isActive: {
+    type: Boolean,
+    default: true
+  }
 });
-
-// Faz hash da password sempre que é criada ou alterada
-UserSchema.pre('save', async function () {
-    if (!this.isModified('password') || BCRYPT_HASH.test(this.password)) return;
-    this.password = await bcrypt.hash(this.password, SALT_ROUNDS);
-});
-
-UserSchema.methods.comparePassword = function (candidate) {
-    if (!this.password || typeof candidate !== 'string') return Promise.resolve(false);
-    return bcrypt.compare(candidate, this.password);
-};
-
-// Garante que a password nunca é enviada numa resposta JSON
-UserSchema.set('toJSON', {
-    transform: (_doc, ret) => {
-        delete ret.password;
-        delete ret.__v;
-        return ret;
-    }
-});
-
-const User = mongoose.model("User",UserSchema);
+const User = mongoose.model("User", UserSchema);
 
 export { BCRYPT_HASH, SALT_ROUNDS };
 export default User;
