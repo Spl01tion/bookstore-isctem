@@ -1,7 +1,8 @@
-import mongoose,{Schema} from "mongoose";
+import mongoose, { Schema } from "mongoose";
+
 
 const UserSchema = new Schema({
-    name: {
+  name: {
     type: String,
     required: [true, 'Nome é obrigatório'],
     trim: true,
@@ -30,16 +31,21 @@ const UserSchema = new Schema({
     type: String,
     default: null
   },
+
+  favoritos: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Livro'
+  }],
+
   createdAt: {
     type: Date,
     default: Date.now
-    },
+  },
   isActive: {
     type: Boolean,
     default: true
   }
 });
-
-const User = mongoose.model("User",UserSchema);
+const User = mongoose.model("User", UserSchema);
 
 export default User;
