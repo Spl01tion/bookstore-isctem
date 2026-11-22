@@ -6,7 +6,6 @@ import {
 import { verifyToken, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
-const router = express.Router();
 
 // Todas as rotas de livros exigem sessão iniciada
 router.get("/livros", verifyToken, getAllLivros);
