@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "IscBookStore",
+    "slug": "IscBookStore",
+    "version": "1.0.0",
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-secure-store",
+      "expo-asset",
+      "expo-splash-screen",
+      "expo-status-bar"
+    ]
+  }
+}

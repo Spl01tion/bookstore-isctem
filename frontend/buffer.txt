@@ -1,0 +1,628 @@
+// Em app/(tabs)/index.jsx
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TextInput,
+  FlatList,
+  Image,
+  TouchableOpacity,
+  ActivityIndicator,
+  SafeAreaView,
+  RefreshControl,
+  Modal,
+  Linking,
+} from 'react-native';
+import { Stack, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { getAllLivros, addFavoriteBook } from '../../api/api';
+
+const BookDetailModal = ({ book, visible, onClose }) => {
+  if (!book) return null;
+  const handleAddToFavorites = async () => {
+    try {
+      await addFavoriteBook(book._id);
+      alert(`${book.titulo} foi adicionado aos favoritos!`);
+      onClose();
+    } catch (error) {
+      console.error('Erro ao adicionar aos favoritos:', error);
+      alert('Não foi possível adicionar aos favoritos.');
+    }
+  };
+  const handleDownload = () => {
+    if (book.download_link) {
+      Linking.openURL(book.download_link).catch((err) =>
+        console.error('Não foi possível abrir o link', err)
+      );
+    } else {
+      alert('Link de download não disponível.');
+    }
+  };
+
+  return (
+    <Modal
+      animationType='slide'
+      transparent={true}
+      visible={visible}
+      onRequestClose={onClose}
+    >
+      <View style={modalStyles.backdrop}>
+        <View style={modalStyles.contentContainer}>
+          {/* CABEÇALHO DO MODAL */}
+          <View style={modalStyles.header}>
+            <Text style={modalStyles.title} numberOfLines={2}>
+              {book.titulo}
+            </Text>
+            <TouchableOpacity onPress={onClose} style={modalStyles.closeButton}>
+              <Ionicons name='close' size={28} color='#666' />
+            </TouchableOpacity>
+          </View>
+
+          {/* ÁREA DE CONTEÚDO ROLÁVEL */}
+
+          <View style={modalStyles.coverContainer}>
+            <Image
+              source={{ uri: book.imagem_uri }}
+              style={modalStyles.coverImage}
+            />
+          </View>
+          <Text style={modalStyles.author}>{book.autores}</Text>
+
+          <View style={modalStyles.detailsGrid}>
+            <Text style={modalStyles.detailItem}>
+              **Páginas:** {book.pag || 'N/A'}
+            </Text>
+            <Text style={modalStyles.detailItem}>
+              **Publicado:**{' '}
+              {book.publiData ? new Date(book.publiData).getFullYear() : 'N/A'}
+            </Text>
+          </View>
+          <ScrollView
+            contentContainerStyle={modalStyles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={modalStyles.description}>{book.descricao}</Text>
+          </ScrollView>
+
+          {/* BOTÕES FIXOS NA PARTE INFERIOR */}
+          <View style={modalStyles.buttonContainer}>
+            <TouchableOpacity
+              style={[modalStyles.button, modalStyles.favoriteButton]}
+              onPress={handleAddToFavorites}
+            >
+              <Ionicons name='heart' size={20} color='#fff' />
+              <Text style={modalStyles.buttonText}>Favoritar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[modalStyles.button, modalStyles.downloadButton]}
+              onPress={handleDownload}
+            >
+              <Ionicons name='download' size={20} color='#fff' />
+              <Text style={modalStyles.buttonText}>Baixar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+const BookCard = ({ book, onCardPress }) => {
+  return (
+    <TouchableOpacity style={styles.bookCard} onPress={() => onCardPress(book)}>
+      <Image
+        source={{
+          uri:
+            book.imagem_uri ||
+            'https://via.placeholder.com/140x180.png?text=Capa',
+        }}
+        style={styles.bookCover}
+      />
+      <Text style={styles.bookTitle} numberOfLines={1}>
+        {book.titulo}
+      </Text>
+      <Text style={styles.bookAuthor} numberOfLines={1}>
+        {book.autores}
+      </Text>
+    </TouchableOpacity>
+  );
+};
+
+const HomeScreen = () => {
+  const [todosLivros, setTodosLivros] = useState([]);
+  const [livrosExibidos, setLivrosExibidos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const [activeFilter, setActiveFilter] = useState('Todos');
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedBook, setSelectedBook] = useState(null);
+  const router = useRouter();
+  const filtros = ['Todos', 'Ficção Científica', 'Educacional', 'Fantasia'];
+
+  const fetchLivros = useCallback(async () => {
+    try {
+      setError(null);
+      const response = await getAllLivros();
+      setTodosLivros(response.data);
+      setLivrosExibidos(response.data);
+    } catch (err) {
+      setError('Não foi possível carregar os livros.');
+      console.error('Erro ao buscar livros:', err);
+    }
+  }, []);
+  useEffect(() => {
+    const loadInitialData = async () => {
+      setLoading(true);
+      await fetchLivros();
+      setLoading(false);
+    };
+    loadInitialData();
+  }, [fetchLivros]);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchLivros();
+    setRefreshing(false);
+  }, [fetchLivros]);
+  useEffect(() => {
+    let l = todosLivros;
+    if (searchText) {
+      l = l.filter(
+        (i) =>
+          i.titulo.toLowerCase().includes(searchText.toLowerCase()) ||
+          i.autores.toLowerCase().includes(searchText.toLowerCase())
+      );
+    }
+    if (activeFilter !== 'Todos') {
+      l = l.filter((i) =>
+        i.categoria.some(
+          (c) => c.nome.toLowerCase() === activeFilter.toLowerCase()
+        )
+      );
+    }
+    setLivrosExibidos(l);
+  }, [searchText, activeFilter, todosLivros]);
+  const handleFilterPress = (f) => {
+    setActiveFilter(f);
+  };
+  const handleCardPress = (b) => {
+    setSelectedBook(b);
+    setModalVisible(true);
+  };
+  const handleCloseModal = () => {
+    setModalVisible(false);
+    setSelectedBook(null);
+  };
+
+  if (loading && !refreshing) {
+    return (
+      <SafeAreaView style={[styles.container, styles.centered]}>
+        <ActivityIndicator size='large' color='#6247AA' />
+      </SafeAreaView>
+    );
+  }
+  if (error) {
+    return (
+      <SafeAreaView style={[styles.container, styles.centered]}>
+        <Text style={styles.errorText}>{error}</Text>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <Stack.Screen
+        options={{
+          headerTitle: 'Início',
+          headerRight: () => (
+            <View style={{ flexDirection: 'row' }}>
+              {/* Ícone de Favoritos */}
+              <TouchableOpacity
+                onPress={() => router.push('/favoritos')}
+                style={{ marginRight: 20 }}
+              >
+                <Ionicons name='heart-outline' size={30} color='#fff' />
+              </TouchableOpacity>
+              {/* Ícone de Perfil */}
+              <TouchableOpacity onPress={() => router.push('/perfil')}>
+                <Ionicons
+                  name='person-circle-outline'
+                  size={32}
+                  color='#fff'
+                  style={{ marginRight: 15 }}
+                />
+              </TouchableOpacity>
+            </View>
+          ),
+        }}
+      />
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor='#6247AA'
+          />
+        }
+      >
+        <View style={styles.searchContainer}>
+          <Ionicons
+            name='search'
+            size={20}
+            color='#888'
+            style={styles.searchIcon}
+          />
+          <TextInput
+            placeholder='Pesquisar por título ou autor...'
+            style={styles.searchInput}
+            value={searchText}
+            onChangeText={setSearchText}
+          />
+          {searchText.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchText('')}>
+              <Ionicons name='close-circle' size={20} color='#888' />
+            </TouchableOpacity>
+          )}
+        </View>
+        <View style={styles.filterContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 15 }}
+          >
+            {filtros.map((f) => (
+              <TouchableOpacity
+                key={f}
+                style={[
+                  styles.filterButton,
+                  activeFilter === f && styles.filterButtonActive,
+                ]}
+                onPress={() => handleFilterPress(f)}
+              >
+                <Text
+                  style={[
+                    styles.filterButtonText,
+                    activeFilter === f && styles.filterButtonTextActive,
+                  ]}
+                >
+                  {f}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Livros Disponíveis</Text>
+          <FlatList
+            data={livrosExibidos}
+            renderItem={({ item }) => (
+              <BookCard book={item} onCardPress={handleCardPress} />
+            )}
+            keyExtractor={(item) => item._id.toString()}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.listContainer}
+            ListEmptyComponent={
+              <Text style={styles.emptyListText}>Nenhum livro encontrado.</Text>
+            }
+          />
+        </View>
+      </ScrollView>
+      <BookDetailModal
+        book={selectedBook}
+        visible={modalVisible}
+        onClose={handleCloseModal}
+      />
+    </SafeAreaView>
+  );
+};
+
+const styles = StyleSheet.create({
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalScrollContainer: {
+    flexGrow: 1,
+    justifyContent: 'center', // Centraliza o modal na tela
+    alignItems: 'center',
+    paddingVertical: 50, // Dá espaço em cima e em baixo para rolar
+  },
+  modalContent: {
+    width: '90%', // O modal ocupa 90% da largura da tela
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 20,
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    zIndex: 1,
+  },
+  modalBookCover: {
+    width: 150,
+    height: 220,
+    borderRadius: 10,
+    marginBottom: 15,
+    marginTop: 20, // Espaço para o botão de fechar
+  },
+  modalBookTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 5,
+  },
+  modalBookAuthor: {
+    fontSize: 16,
+    color: 'gray',
+    marginBottom: 20,
+  },
+
+  modalDetailsGrid: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 20,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#eee',
+    paddingVertical: 10,
+  },
+  detailItem: {
+    fontSize: 14,
+  },
+  modalButtonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+  },
+  modalButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 10,
+    flex: 1,
+  },
+  favoriteButton: {
+    backgroundColor: '#ff6b6b',
+    marginRight: 10,
+  },
+  downloadButton: {
+    backgroundColor: '#6247AA',
+  },
+  modalButtonText: {
+    color: '#fff',
+    marginLeft: 10,
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  container: { flex: 1, backgroundColor: '#f4f4f8' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  errorText: { fontSize: 16, color: 'red' },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    marginHorizontal: 15,
+    marginTop: 15,
+    paddingHorizontal: 10,
+    elevation: 2,
+  },
+  searchIcon: { marginRight: 10 },
+  searchInput: { flex: 1, height: 50, fontSize: 16 },
+  filterContainer: { height: 50, justifyContent: 'center', marginTop: 5 },
+  filterButton: {
+    backgroundColor: '#fff',
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 20,
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  filterButtonActive: { backgroundColor: '#6247AA', borderColor: '#6247AA' },
+  filterButtonText: { color: '#333', fontWeight: '500' },
+  filterButtonTextActive: { color: '#fff' },
+  section: { marginBottom: 25 },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333',
+    marginLeft: 15,
+    marginTop: 20,
+    marginBottom: 15,
+  },
+  listContainer: { paddingLeft: 15 },
+  bookCard: { width: 140, marginRight: 15 },
+  bookCover: {
+    width: '100%',
+    height: 180,
+    borderRadius: 10,
+    backgroundColor: '#e0e0e0',
+  },
+  bookTitle: { fontSize: 16, fontWeight: '600', marginTop: 10, color: '#444' },
+  bookAuthor: { fontSize: 13, color: '#777', marginTop: 2 },
+  emptyListText: { marginLeft: 15, color: '#888' },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    paddingHorizontal: 20,
+    paddingTop: 40,
+    paddingBottom: 20,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    alignItems: 'center',
+  },
+  closeButton: { position: 'absolute', top: 15, right: 15, zIndex: 1 },
+  modalBookCover: {
+    width: 150,
+    height: 220,
+    borderRadius: 10,
+    marginBottom: 15,
+  },
+  modalBookTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 5,
+  },
+  modalBookAuthor: { fontSize: 16, color: 'gray', marginBottom: 5 },
+  descriptionScrollView: { maxHeight: 100, marginVertical: 15 },
+
+  modalDetailsGrid: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 15,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#eee',
+    paddingVertical: 10,
+  },
+  detailItem: { fontSize: 14 },
+  modalButtonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+  },
+  modalButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 10,
+    flex: 1,
+  },
+  favoriteButton: { backgroundColor: '#ff6b6b', marginRight: 10 },
+  downloadButton: { backgroundColor: '#6247AA' },
+  modalButtonText: {
+    color: '#fff',
+    marginLeft: 10,
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+});
+
+const modalStyles = StyleSheet.create({
+  // Fundo escuro e semi-transparente
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // Container principal do modal
+  contentContainer: {
+    width: '92%',
+    maxHeight: '85%',
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    overflow: 'hidden', // Garante que os cantos arredondados sejam aplicados ao conteúdo
+  },
+  // Cabeçalho fixo
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    borderBottomWidth: 1,
+    borderColor: '#eee',
+    backgroundColor: '#f8f8f8',
+  },
+  title: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  closeButton: {
+    padding: 5,
+  },
+  // Área de conteúdo que pode rolar
+  scrollContent: {
+    padding: 15,
+  },
+  coverContainer: {
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  coverImage: {
+    width: 160,
+    height: 240,
+    borderRadius: 10,
+  },
+  author: {
+    textAlign: 'center',
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 15,
+  },
+  detailsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#eee',
+    marginBottom: 15,
+  },
+  detailItem: {
+    fontSize: 14,
+    color: '#333',
+  },
+  // Descrição que pode ter 6 páginas
+  description: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: '#444',
+    textAlign: 'justify',
+  },
+  // Área de botões fixa
+  buttonContainer: {
+    flexDirection: 'row',
+    padding: 15,
+    borderTopWidth: 1,
+    borderColor: '#eee',
+  },
+  button: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  favoriteButton: {
+    backgroundColor: '#ff6b6b',
+    marginRight: 10,
+  },
+  downloadButton: {
+    backgroundColor: '#6247AA',
+  },
+  buttonText: {
+    color: '#fff',
+    marginLeft: 10,
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+});
+
+export default HomeScreen;
